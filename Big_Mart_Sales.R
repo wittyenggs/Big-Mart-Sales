@@ -1,4 +1,6 @@
 library('caret')
+library('Boruta')
+library('randomForest')
 
 #Load Datasets
 train <- read.csv('Train.csv',sep = ',',header = TRUE,na.strings = c('',' '))
@@ -6,6 +8,10 @@ test <- read.csv('Test.csv',sep = ',',header = TRUE, na.strings = c('', ' '))
 
 #Define target variable name
 target <- "Item_Outlet_Sales"
+
+#Exclude Item Identifier variable
+train <- train[, -1]
+test <- test[,-1]
 
 #Save target variable values
 Sales <- train[,target]
@@ -54,16 +60,41 @@ for (i in 1:length(stats_whisker)){
   col_name <- stats_whisker[[i]][[1]]
   lower <- stats_whisker[[i]][[2]]
   upper <- stats_whisker[[i]][[3]]
-  print (paste(col_name,lower,upper))
   
   train_modified[,col_name][(train_modified[,col_name] > upper) | (train_modified[,col_name] < lower)] <-
     mean(train_modified[,col_name][(train_modified[,col_name] <= upper) & 
                             (train_modified[,col_name] >= lower)])
 } 
 
-for (col_name in numerical_columns){
-  
-  box <- boxplot(train_modified[,col_name],xlab = col_name)
-  stats <- list(col_name,box$stats[1],box$stats[5])
-  stats_whisker <- append(stats_whisker,list(stats))
-}
+#train_modified <- cbind(train_modified, Sales)
+
+train_modified <- predict(preProcess(train_modified,method = c('range')),train_modified)
+#boruta_model <- Boruta(Sales ~., train_modified)
+#final.model <- TentativeRoughFix(boruta_model)
+#variables <- getSelectedAttributes(final.model, withTentative = F)
+
+#control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+#rfe.train <- rfe(train_modified[,2:11], train_modified[,12], sizes=1:12, rfeControl=control)
+
+
+dummy_train <- dummyVars(~., data = train_modified, fullRank = T)
+train_dummy <- data.frame(predict(dummy_train,train_modified))
+
+#col_names <- sapply(train_dummy, function(col) length(unique(col)) < 40)
+#train_dummy[ , col_names] <- lapply(train_dummy[ , col_names] , factor)
+
+
+train_control <- trainControl(method = "repeatedcv",
+                              number = 10,repeats = 10)
+
+# model_lm <- train(Sales ~ ., data = train_dummy, method = "lm", 
+#                  trControl = train_control,verbose = TRUE)
+ 
+#model_rf <- model_lm <- train(Sales ~ ., data = train_dummy, method = "rf",
+#                              trControl = train_control,verbose = TRUE)
+
+pca.train <- train_dummy[1:nrow(train_dummy),]
+pca.test <- train_dummy[-(1:nrow(train_dummy)),]
+
+prin_comp <- prcomp(pca.train, scale. = T)
+names(prin_comp)
